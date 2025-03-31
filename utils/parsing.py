@@ -1,10 +1,11 @@
 from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.common.by import By
 import re
 from datetime import datetime
 
 from bs4 import BeautifulSoup
 from typing import Literal
-from utils.utils import unicode_escape_url, write_element
+from utils.utils import unicode_escape_url, write_element, to_bs4
 
 en_month_map = {
     "january": 1,
@@ -79,3 +80,21 @@ def get_video_url_from_source(source: str):
     #         "video_url": "",
     #         "audio_url": ""
     #     }
+
+def get_text_from_cmt_bubble(comment_bubble: WebElement, lang: Literal["vi", "en"]):
+    see_more_text = {"vi": "Xem thêm", "en": "See more"}
+    if to_bs4(comment_bubble).find("div", {"role": "button"}, string=see_more_text[lang]):
+        comment_bubble.find_element(By.XPATH, f".//div[@role='button' and text()='{see_more_text[lang]}']").click()
+
+    if not to_bs4(comment_bubble).find("div", attrs={"class": "x1lliihq xjkvuk6 x1iorvi4"}):
+        return ""
+
+    text_div = comment_bubble.find_element(By.XPATH, ".//div[@class='x1lliihq xjkvuk6 x1iorvi4']")
+    text = parse_text_from_element(text_div)
+    return text
+
+def get_id_from_cmt_bubble(comment_bubble: WebElement):
+    link_a = comment_bubble.find_element(By.XPATH, ".//div[@class='x6s0dn4 x3nfvp2']//a[@role='link' and @tabindex='0']")
+    link = link_a.get_attribute("href")
+    id = re.search(r"comment_id=(\d+)", link).group(1)
+    return id

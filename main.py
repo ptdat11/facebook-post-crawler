@@ -19,6 +19,14 @@ def parse_args():
         "--user", "-u", help="Facebook user in secrets.json", required=True
     )
     parser.add_argument(
+        "--additional-js-heap",
+        "-addheap",
+        default=2.,
+        type=float,
+        help="Additional memory can be stored by JavaScript VM in GB. Default is 4GB.",
+        dest="additional_js_heap",
+    )
+    parser.add_argument(
         "--crawler-dir",
         "-s",
         default="./data/",
@@ -100,6 +108,7 @@ if __name__ == "__main__":
         sleep_weibull_lambda=args.sleep_weibull_lambda,
         max_loading_wait=args.max_loading_wait,
         max_error_trials=args.max_error_trials,
+        additional_JS_heap=args.additional_js_heap,
         **config.CRAWLER_ARGUMENTS.get(args.crawler, dict()),
     )
 

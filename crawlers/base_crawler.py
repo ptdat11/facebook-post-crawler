@@ -59,6 +59,7 @@ class BaseCrawler:
         sleep_weibull_lambda: float = 10.0,
         max_loading_wait: float = 90,
         max_error_trials: int = 5,
+        additional_JS_heap: float = 2.,
         name: str = "Crawler",
     ):
         self.logger = Logger(name)
@@ -83,6 +84,9 @@ class BaseCrawler:
         self.driver_options = webdriver.ChromeOptions()
 
         # Options
+        # Expand maximum heap
+        self.driver_options.add_argument("--enable-precise-memory-info")
+        self.driver_options.add_argument(f'--js-flags=--max_old_space_size=0 --max_semi_space_size={int(1024 * additional_JS_heap / 3 + 32)}')
         ## Disable image loading
         self.driver_options.add_argument("--blink-settings=imagesEnabled=false")
         ## Disable notifications
@@ -96,8 +100,10 @@ class BaseCrawler:
             self.driver_options.add_experimental_option("detach", True)
             self.driver_options.add_argument("--ignore-certificate-errors")
         
-        self.no_cookie_options = deepcopy(self.driver_options)
-        self.driver_options.add_argument("--incognito")
+        self.alt_chrome_options = deepcopy(self.driver_options)
+        # self.driver_options.add_argument("--incognito")
+        self.alt_chrome = None
+        self.alt_chrome_cookies_flag = False
 
     def on_start(self):
         # raise NotImplementedError("Crawler's on_start method is not implemented")
@@ -117,11 +123,22 @@ class BaseCrawler:
     def parse(self) -> Iterable[dict[str, Any]]:
         raise NotImplementedError("Crawler's parse method is not implemented")
 
-    def new_tab(self, url: str):
+    def new_tab(self, url: str | None = None):
         self.chrome.execute_script("window.open('about:blank', '_blank');")
-        self.chrome.switch_to.window(self.chrome.window_handles[-1])
-        self.chrome.get(url)
-        self.logger.info(f"Opened new tab to {grey(url)}")
+        new_handle = self.chrome.window_handles[-1]
+        self.chrome.switch_to.window(new_handle)
+        if url:
+            self.chrome.get(url)
+            self.logger.info(f"Opened new tab to {grey(url)}")
+        return new_handle
+    
+    def as_single_blank_tab(self):
+        old_tabs = self.chrome.window_handles
+        new_tab = self.new_tab()
+        for tab_handle in old_tabs:
+            self.chrome.switch_to.window(tab_handle)
+            self.chrome.close()
+        self.chrome.switch_to.window(new_tab)
 
     def close_all_new_tabs(self):
         for handle in self.chrome.window_handles:
@@ -155,10 +172,11 @@ class BaseCrawler:
         )
         self.main_tab = self.chrome.current_window_handle
         self.logger.info(f"Driver started")
+        base_heap = 4294705152 / 1024**3
+        extra_heap = float(self.chrome.execute_script("return (window.performance.memory.jsHeapSizeLimit - 4294705152) / 1024**3"))
+        self.logger.info(f"JavaScript VM has {(base_heap + extra_heap):.2f}GB of memory space (extra {extra_heap:.2f}GB).")
         self.action = ActionChains(self.chrome)
         self.wait = WebDriverWait(self.chrome, self.max_loading_wait)
-
-        self.no_cookie_chrome = None
 
     def save_cookies(self):
         self.cookies.save(self.chrome.get_cookies())
@@ -349,43 +367,51 @@ class BaseCrawler:
             {"cmd": "Network.clearBrowserCookies", "params": {}}
         )
     
-    def clean_memory(self):
+    def clean_memory(self, gc: bool = False):
         self.chrome.execute_cdp_cmd('Network.clearBrowserCache', {})
         self.chrome.execute_script("window.localStorage.clear();")
         self.chrome.execute_script("window.sessionStorage.clear();")
         self.chrome.execute_script('indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name)));')
-        self.chrome.execute_script("window.gc && window.gc();")
+        if gc:
+            self.chrome.execute_script("window.gc && window.gc();")
     
     @contextmanager
-    def new_chrome_no_cookies(self, url: str | None = None, quit_on_done: bool = False):
-        # current_tab = self.chrome.current_window_handle
-        # self.chrome.switch_to.new_window("tab")
-        # self.delete_all_cookies()
-        # self.chrome.get(url)
-        if not self.no_cookie_chrome:
-            self.no_cookie_chrome = webdriver.Chrome(
-                service=Service(self.chromedriver_path), options=self.no_cookie_options
+    def open_alt_chrome(self, url: str | None = None, use_cookies: bool = False, quit_on_done: bool = False):
+        if not self.alt_chrome:
+            self.alt_chrome = webdriver.Chrome(
+                service=Service(self.chromedriver_path), 
+                options=self.alt_chrome_options
             )
+
+        if not self.alt_chrome_cookies_flag and use_cookies:
+            self.alt_chrome.get("https://www.facebook.com")
+            for cookie in self.cookies.load():
+                self.alt_chrome.add_cookie(cookie)
+            self.alt_chrome_cookies_flag = True
+        elif not use_cookies:
+            self.alt_chrome.delete_all_cookies()
+            self.alt_chrome_cookies_flag = False
+
         if url:
-            self.no_cookie_chrome.get(url)
+            self.alt_chrome.get(url)
             self.logger.info(f"Opened new Chrome driver to {grey(url)}")
             self.wait_DOM()
             self.wait.until(EC.presence_of_element_located((By.XPATH, "html")))
 
         try:
-            yield self.no_cookie_chrome
+            yield self.alt_chrome
         finally:
-            self.no_cookie_chrome.execute(
+            self.alt_chrome.execute(
                 "executeCdpCommand",
                 {"cmd": "Network.clearBrowserCookies", "params": {}}
             )
-            self.no_cookie_chrome.execute_cdp_cmd('Network.clearBrowserCache', {})
-            self.no_cookie_chrome.execute_script("window.localStorage.clear();")
-            self.no_cookie_chrome.execute_script("window.sessionStorage.clear();")
-            self.no_cookie_chrome.execute_script('indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name)));')
-            self.no_cookie_chrome.execute_script("window.gc && window.gc();")
-            self.no_cookie_chrome.get("about:blank")
+            self.alt_chrome.execute_cdp_cmd('Network.clearBrowserCache', {})
+            self.alt_chrome.execute_script("window.localStorage.clear();")
+            self.alt_chrome.execute_script("window.sessionStorage.clear();")
+            self.alt_chrome.execute_script('indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name)));')
+            # self.no_cookie_chrome.execute_script("window.gc && window.gc();")
+            self.alt_chrome.get("about:blank")
             
             if quit_on_done:
-                self.no_cookie_chrome.quit()
-                self.no_cookie_chrome = None
+                self.alt_chrome.quit()
+                self.alt_chrome = None

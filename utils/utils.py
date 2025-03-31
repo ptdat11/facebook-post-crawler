@@ -83,7 +83,7 @@ def to_etree(element: WebElement) -> etree.Element:
     return etree.HTML(element.get_attribute("outerHTML"))
 
 
-def write_element(self, dst: str, element: WebElement):
+def write_element(element: WebElement, dst: str):
         soup = to_bs4(element)
         try:
             with open(dst, "w") as f:

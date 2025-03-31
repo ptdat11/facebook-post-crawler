@@ -256,20 +256,20 @@ class Crawler(BaseCrawler):
 
         # Get reaction counts
         total_reactions = reaction_div.find_element(By.XPATH, ".//span[@class='xrbpyxo x6ikm8r x10wlt62 xlyipyv x1exxlbk']").text
-        self.action.click(reaction_div).pause(2).perform()
-        reaction_modal = self.chrome.find_element(By.XPATH, "//div[@role='dialog']")
-        reaction_counts = reaction_modal.find_elements(By.XPATH, "./descendant::div[@class='x1swvt13 x1pi30zi']/descendant::div[@class='x6ikm8r x10wlt62 xlshs6z']/div")
-        modal_close = reaction_modal.find_element(By.XPATH, "./descendant::div[@class='x1d52u69 xktsk01']/div")
-        reactions = {r: 0 for src, r in Crawler.emoji_src_map.items()}
-        for _reaction in reaction_counts:
-            all_reaction_text = {"vi": "Tất cả", "en": "All"}
-            if (text := to_bs4(_reaction.find_element(By.XPATH, ".//span")).text) == all_reaction_text[self.language]:
-                continue
-            icon_src = _reaction.find_element(By.XPATH, ".//img").get_attribute("src")
-            icon_src = re.search(r"/t6/([^\.]+\.png)\?", icon_src).group(1)
-            count = text
-            reactions[Crawler.emoji_src_map[icon_src]] = count
-        modal_close.click()
+        # self.action.click(reaction_div).pause(2).perform()
+        # reaction_modal = self.chrome.find_element(By.XPATH, "//div[@role='dialog']")
+        # reaction_counts = reaction_modal.find_elements(By.XPATH, "./descendant::div[@class='x1swvt13 x1pi30zi']/descendant::div[@class='x6ikm8r x10wlt62 xlshs6z']/div")
+        # modal_close = reaction_modal.find_element(By.XPATH, "./descendant::div[@class='x1d52u69 xktsk01']/div")
+        # reactions = {r: 0 for src, r in Crawler.emoji_src_map.items()}
+        # for _reaction in reaction_counts:
+        #     all_reaction_text = {"vi": "Tất cả", "en": "All"}
+        #     if (text := to_bs4(_reaction.find_element(By.XPATH, ".//span")).text) == all_reaction_text[self.language]:
+        #         continue
+        #     icon_src = _reaction.find_element(By.XPATH, ".//img").get_attribute("src")
+        #     icon_src = re.search(r"/t6/([^\.]+\.png)\?", icon_src).group(1)
+        #     count = text
+        #     reactions[Crawler.emoji_src_map[icon_src]] = count
+        # modal_close.click()
 
         # Ensure post's text content showing full version
         see_more_text = {"vi": "Xem thêm", "en": "See more"}
@@ -314,7 +314,7 @@ class Crawler(BaseCrawler):
             "num_shares": num_shares,
             "num_reactions": total_reactions,
         }
-        result.update(reactions)
+        # result.update(reactions)
         return result
     
     def start(self):
