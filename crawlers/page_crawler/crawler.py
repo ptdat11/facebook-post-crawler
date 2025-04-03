@@ -131,6 +131,7 @@ class Crawler(BaseCrawler):
     def parse(self):
         self.pagename = self.chrome.find_element(By.XPATH, "//h1").text.strip()
         self.remove_header()
+        cover_photo_text = {"vi": re.compile(r"đã cập nhật ảnh bìa của họ\.$"), "en": re.compile(r" updated their cover photo\.$")}
         n_scraped_posts = 0
         current_post_idx = 1
 
@@ -138,11 +139,7 @@ class Crawler(BaseCrawler):
             tqdm(total=round(virtual_memory().total / 1024**3, ndigits=2), desc="RAM Usage (GB)")
         ) as bar:
             # Scroll though page's feed
-            while (
-                ram_usage := virtual_memory()
-            ).percent / 100 < self.max_ram_percentage and not (
-                met := self.post_collect_criteria.condition_met()
-            ):
+            while (ram_usage := virtual_memory()).percent / 100 < self.max_ram_percentage and not (met := self.post_collect_criteria.condition_met()):
                 bar.n = round(ram_usage.used / 1024**3, ndigits=2)
                 bar.refresh()
 
@@ -158,50 +155,50 @@ class Crawler(BaseCrawler):
                 )
                 self.post_collect_criteria.update_progress(self.chrome)
 
-                for post_div in self.get_loaded_posts(start=1, stop=1):
-                    post = None
-                    scraped = False
-                    self.scroll_into_view(post_div, sleep=1)
+                post_div = self.get_loaded_posts(start=1, stop=1)[0]
+                post = None
+                scraped = False
+                self.scroll_into_view(post_div, sleep=1)
 
-                    try:
-                        # Check if reel
-                        if to_bs4(post_div).find("a")["href"].startswith("/reel"):
-                            self.logger.info(f"Found {ordinal(current_post_idx)} post as reel, skipping...")
+                try:
+                    # Check if reel
+                    if to_bs4(post_div).find("a")["href"].startswith("/reel"):
+                        self.logger.info(f"Found {ordinal(current_post_idx)} post as reel, skipping...")
 
-                        # Check if update avatar
-                        elif to_bs4(post_div).find(
-                            "img", {"data-imgperflogname": "feedCoverPhoto"}
-                        ):
-                            self.logger.info(f"Found {ordinal(current_post_idx)} post as avatar, skipping...")
-                            
-                        # Normal post
-                        else:
-                            post = self.parse_post(post_div)
-                            scraped = True
-                    except Exception as e:
-                        exc_type, value, tb = sys.exc_info()
-                        self.logger.warning(
-                            f"Skipping {ordinal(current_post_idx)} post: {red(exc_type.__name__)}: {value}\n{traceback.format_exc()}"
-                        )
-                        continue
-                    finally:
-                        current_post_idx += 1
-                        time.sleep(1)
-                        self.remove_element(post_div.find_element(By.XPATH, "./../.."))
-                        self.clean_memory()
+                    # Check if update avatar
+                    elif to_bs4(post_div).find("img", {"data-imgperflogname": "feedCoverPhoto"}):
+                        self.logger.info(f"Found {ordinal(current_post_idx)} post as avatar, skipping...")
 
-                    # Return result
-                    if post:
-                        yield post
-                    # Continue looping
-                    n_scraped_posts += scraped
-                    bar.set_postfix_str(f"Scraped: {n_scraped_posts}")
+                    # Check if update cover photo
+                    elif to_bs4(post_div).find("h2").find(string=cover_photo_text[self.language]):
+                        self.logger.info(f"Found {ordinal(current_post_idx)} post as cover photo, skipping...")
+                        
+                    # Normal post
+                    else:
+                        post = self.parse_post(post_div)
+                        scraped = True
+                except Exception as e:
+                    exc_type, value, tb = sys.exc_info()
+                    self.logger.warning(
+                        f"Skipping {ordinal(current_post_idx)} post: {red(exc_type.__name__)}: {value}\n{traceback.format_exc()}"
+                    )
+                    continue
+                finally:
+                    current_post_idx += 1
+                    time.sleep(1)
+                    self.remove_element(post_div.find_element(By.XPATH, "./../.."))
+                    self.clean_memory()
+
+                # Return result
+                if post:
+                    yield post
+                # Continue looping
+                n_scraped_posts += scraped
+                bar.set_postfix_str(f"Scraped: {n_scraped_posts}")
                 self.sleep()
 
         if met:
-            self.logger.info(
-                f"Post collect stopping criteria has met with threshold of {self.post_collect_criteria.threshold}"
-            )
+            self.logger.info(f"Post collect stopping criteria has met with threshold of {self.post_collect_criteria.threshold}")
 
     def on_parse_complete(self, data):
         data["pagename"] = self.pagename

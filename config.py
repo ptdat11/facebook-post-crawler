@@ -17,7 +17,7 @@ PARSE_LINK_EXTRACTOR = LinkExtractor(
 
 CRAWLER_ARGUMENTS = {
     "bank_crawler": dict(
-        page_id="VietinBank",
+        page_id="PVcomBankFanpage",
         continue_queue=False,
         # post_collect_criterion="post_time",  # ["elapsed_minutes", "n_posts", "post_time"]
         # post_collect_threshold=datetime(year=2024, month=9, day=1),
