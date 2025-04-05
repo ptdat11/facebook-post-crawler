@@ -243,6 +243,13 @@ class Crawler(BaseCrawler):
                     self.chrome.delete_all_cookies()
                     self.chrome.get(url)
                     self.wait_DOM()
+                    if self.page_source_soup().find("span", string="This content isn't available at the moment"):
+                        self.logger.warning(f"Post is no longer available at {url}, skipping...")
+                        post_urls.pop(id)
+                        bar.update()
+                        self.sleep()
+                        continue
+
                     self.remove_by_xpath([
                         "//div[@role='banner']",
                         "//div[@class='x7wzq59 xxzkxad xh8yej3 xzkaem6']",
