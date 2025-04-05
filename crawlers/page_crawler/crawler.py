@@ -233,91 +233,96 @@ class Crawler(BaseCrawler):
             comment_csv_path = f"{self.crawler_dir}/{self.page_id}/comments.csv"
             try:
                 while post_urls:
-                    id, d = tuple(post_urls.items())[0]
-                    url = d["url"]
-                    is_reel = d["is_reel"]
-                    num_visual_content = d["num_visual_content"]
-                    first_content_type = d["first_content_type"]
+                    try:
+                        id, d = tuple(post_urls.items())[0]
+                        url = d["url"]
+                        is_reel = d["is_reel"]
+                        num_visual_content = d["num_visual_content"]
+                        first_content_type = d["first_content_type"]
 
-                    self.chrome.get("https://www.facebook.com/")
-                    self.chrome.delete_all_cookies()
-                    self.chrome.get(url)
-                    self.wait_DOM()
-                    if self.page_source_soup().find("span", string="This content isn't available at the moment"):
-                        self.logger.warning(f"Post is no longer available at {url}, skipping...")
+                        self.chrome.get("https://www.facebook.com/")
+                        self.chrome.delete_all_cookies()
+                        self.chrome.get(url)
+                        self.wait_DOM()
+                        if self.page_source_soup().find("span", string="This content isn't available at the moment"):
+                            self.logger.warning(f"Post is no longer available at {url}, skipping...")
+                            post_urls.pop(id)
+                            bar.update()
+                            self.sleep()
+                            continue
+
+                        self.remove_by_xpath([
+                            "//div[@role='banner']",
+                            "//div[@class='x7wzq59 xxzkxad xh8yej3 xzkaem6']",
+                        ])
+                        
+                        visual_urls = {"img_urls": [], "video_urls": [], "video_audio_urls": []}
+                        if first_content_type in ["reel", "video"]:
+                            video_urls = get_video_url_from_source(self.chrome.page_source)
+                            visual_urls["img_urls"].append("")
+                            visual_urls["video_urls"].append(video_urls["video_url"])
+                            visual_urls["video_audio_urls"].append(video_urls["audio_url"])
+
+                        elif first_content_type == "img":
+                            post_div = self.chrome.find_element(By.XPATH, "//div[@role='dialog']")
+                            first_image_a = post_div.find_element(By.XPATH, ".//div[@class='html-div xdj266r x11i5rnm xat24cr x1mh8g0r xexx8yu x4uap5 x18d9i69 xkhd6sd x1n2onr6']//a")
+                            if first_image_a.get_attribute("href").startswith("tel"):
+                                img_url = first_image_a.find_element(By.XPATH, ".//img").get_attribute("src")
+                                visual_urls["img_urls"].append(img_url)
+                            else:
+                                first_image_a.click()
+                                first_content_id = self.get_visual_content_id(self.chrome.current_url, "img")
+                                orig_post_id = self.get_post_id_from_dialog()
+
+                                iter = 0
+                                while True:
+                                    # Remove loging modal if exists
+                                    if self.page_source_etree().xpath("//div[@class='x78zum5 xdt5ytf xg6iff7 xippug5 x1n2onr6']//div[@role='dialog']//div[@class='xxqbpr x1gja9t x17p1517 x8vdgqj x2b8uid']"):
+                                        self.remove_by_xpath("(//div[@class='x78zum5 xdt5ytf xg6iff7 xippug5 x1n2onr6'])[last()]")
+                                        
+                                    post_id = self.get_post_id_from_dialog()
+                                    is_video = self.page_source_soup().find("img", {"data-visualcompletion": "media-vc-image"}) is None
+                                    if is_video:
+                                        content_id = self.get_visual_content_id(self.chrome.current_url, "video")
+                                        video_result = get_video_url_from_source(self.chrome.page_source)
+                                        visual_urls["img_urls"].append("")
+                                        visual_urls["video_urls"].append(video_result["video_url"])
+                                        visual_urls["video_audio_urls"].append(video_result["audio_url"])
+
+                                    else:
+                                        content_id = self.get_visual_content_id(self.chrome.current_url, "img")
+                                        img_el = self.chrome.find_element(By.XPATH, f"//img[@data-visualcompletion='media-vc-image']")
+                                        img_url = img_el.get_attribute("src")
+                                        visual_urls["img_urls"].append(img_url)
+                                        visual_urls["video_urls"].append("")
+                                        visual_urls["video_audio_urls"].append("")
+
+                                    # Check if came back to first content or jumped to other post
+                                    if iter > 0 and (content_id == first_content_id or orig_post_id != post_id):
+                                        break
+                                    
+                                    # Move to next content, if there is any
+                                    next_btn_exist = self.page_source_soup().find("div", {"aria-label": "Next photo"}) is not None
+                                    if next_btn_exist:
+                                        next_img_btn = self.chrome.find_element(By.XPATH, f"//div[@aria-label='Next photo']")
+                                        self.action.move_to_element(next_img_btn).click(next_img_btn).pause(0.5).perform()
+
+                                    # If no next image
+                                    else: break
+
+                                    iter += 1
+
+                        cmt_data = pd.DataFrame(visual_urls)
+                        cmt_data["post_id"] = id
+                        pipline(cmt_data)
+
+                    except:
+                        exc_type, value, tb = sys.exc_info()
+                        self.logger.warning(f"Skipping post {url}: {red(exc_type.__name__)}: {value}\n{traceback.format_exc()}")
+                    finally:
                         post_urls.pop(id)
                         bar.update()
                         self.sleep()
-                        continue
-
-                    self.remove_by_xpath([
-                        "//div[@role='banner']",
-                        "//div[@class='x7wzq59 xxzkxad xh8yej3 xzkaem6']",
-                    ])
-                    
-                    visual_urls = {"img_urls": [], "video_urls": [], "video_audio_urls": []}
-                    if first_content_type in ["reel", "video"]:
-                        video_urls = get_video_url_from_source(self.chrome.page_source)
-                        visual_urls["img_urls"].append("")
-                        visual_urls["video_urls"].append(video_urls["video_url"])
-                        visual_urls["video_audio_urls"].append(video_urls["audio_url"])
-
-                    elif first_content_type == "img":
-                        post_div = self.chrome.find_element(By.XPATH, "//div[@role='dialog']")
-                        first_image_a = post_div.find_element(By.XPATH, ".//div[@class='html-div xdj266r x11i5rnm xat24cr x1mh8g0r xexx8yu x4uap5 x18d9i69 xkhd6sd x1n2onr6']//a")
-                        if first_image_a.get_attribute("href").startswith("tel"):
-                            img_url = first_image_a.find_element(By.XPATH, ".//img").get_attribute("src")
-                            visual_urls["img_urls"].append(img_url)
-                        else:
-                            first_image_a.click()
-                            first_content_id = self.get_visual_content_id(self.chrome.current_url, "img")
-                            orig_post_id = self.get_post_id_from_dialog()
-
-                            iter = 0
-                            while True:
-                                # Remove loging modal if exists
-                                if self.page_source_etree().xpath("//div[@class='x78zum5 xdt5ytf xg6iff7 xippug5 x1n2onr6']//div[@role='dialog']//div[@class='xxqbpr x1gja9t x17p1517 x8vdgqj x2b8uid']"):
-                                    self.remove_by_xpath("(//div[@class='x78zum5 xdt5ytf xg6iff7 xippug5 x1n2onr6'])[last()]")
-                                    
-                                post_id = self.get_post_id_from_dialog()
-                                is_video = self.page_source_soup().find("img", {"data-visualcompletion": "media-vc-image"}) is None
-                                if is_video:
-                                    content_id = self.get_visual_content_id(self.chrome.current_url, "video")
-                                    video_result = get_video_url_from_source(self.chrome.page_source)
-                                    visual_urls["img_urls"].append("")
-                                    visual_urls["video_urls"].append(video_result["video_url"])
-                                    visual_urls["video_audio_urls"].append(video_result["audio_url"])
-
-                                else:
-                                    content_id = self.get_visual_content_id(self.chrome.current_url, "img")
-                                    img_el = self.chrome.find_element(By.XPATH, f"//img[@data-visualcompletion='media-vc-image']")
-                                    img_url = img_el.get_attribute("src")
-                                    visual_urls["img_urls"].append(img_url)
-                                    visual_urls["video_urls"].append("")
-                                    visual_urls["video_audio_urls"].append("")
-
-                                # Check if came back to first content or jumped to other post
-                                if iter > 0 and (content_id == first_content_id or orig_post_id != post_id):
-                                    break
-                                
-                                # Move to next content, if there is any
-                                next_btn_exist = self.page_source_soup().find("div", {"aria-label": "Next photo"}) is not None
-                                if next_btn_exist:
-                                    next_img_btn = self.chrome.find_element(By.XPATH, f"//div[@aria-label='Next photo']")
-                                    self.action.move_to_element(next_img_btn).click(next_img_btn).pause(0.5).perform()
-
-                                # If no next image
-                                else: break
-
-                                iter += 1
-
-                    cmt_data = pd.DataFrame(visual_urls)
-                    cmt_data["post_id"] = id
-                    pipline(cmt_data)
-
-                    post_urls.pop(id)
-                    bar.update()
-                    self.sleep()
                 if os.path.exists(self.remaining_urls_path):
                     os.remove(self.remaining_urls_path)
 
