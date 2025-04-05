@@ -16,6 +16,13 @@ PARSE_LINK_EXTRACTOR = LinkExtractor(
 )
 
 CRAWLER_ARGUMENTS = {
+    "page_crawler": dict(
+        page_id="shynhpremiumhcm",
+        post_collect_threshold=2000,
+        language="vi",  # ["vi", "en"]
+        theme="dark",  # ["light", "dark"]
+        max_ram_percentage=0.95, # Should be at least 0.9 for Facebook to autoclean its memory
+    ),
     "bank_crawler": dict(
         page_id="PVcomBankFanpage",
         continue_queue=False,

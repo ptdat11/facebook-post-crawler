@@ -1,6 +1,7 @@
 __pycache__
 cookies/*
 data/*
+fc-data/*
 test.ipynb
 index.html
 error-screenshots

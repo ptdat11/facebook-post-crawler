@@ -10,7 +10,7 @@ from selenium.webdriver import ActionChains
 
 from utils import Logger, Progress, LinkExtractor, Cookies
 from utils.colors import *
-from utils.utils import login, is_logged_in, ordinal, to_bs4
+from utils.utils import login, is_logged_in, ordinal, to_bs4, to_etree
 from EC import more_items_loaded
 from pipeline import Pipeline
 
@@ -22,6 +22,7 @@ import logging
 from copy import deepcopy
 from datetime import datetime
 from bs4 import BeautifulSoup
+from lxml import etree
 from os.path import join
 from urllib.parse import urlparse
 from traceback import format_exc
@@ -220,6 +221,14 @@ class BaseCrawler:
     def remove_element(self, element: WebElement):
         self.chrome.execute_script("arguments[0].remove();", element)
 
+    def remove_by_xpath(self, xpaths: str | list[str]):
+        if isinstance(xpaths, str):
+            xpaths = [xpaths]
+        for rm_xpath in xpaths:
+            if to_etree(self.chrome.find_element(By.XPATH, "//html")).xpath(rm_xpath):
+                to_be_removed = self.chrome.find_element(By.XPATH, rm_xpath)
+                self.remove_element(to_be_removed)
+
     def ensure_logged_in(self):
         self.logger.info("Ensuring user logging in")
         if self.cookies.exists():
@@ -360,6 +369,9 @@ class BaseCrawler:
 
     def page_source_soup(self):
         return BeautifulSoup(self.chrome.page_source, "lxml")
+    
+    def page_source_etree(self):
+        return etree.HTML(self.chrome.page_source)
 
     def delete_all_cookies(self):
         self.chrome.execute(

@@ -120,7 +120,7 @@ class Crawler(BaseCrawler):
         self.theme = theme
         self.set_pipeline_path_format(page_id=page_id)
         # self.queue_file_path = Path(self.crawler_dir) / self.page_id / "queue_posts.txt"
-        self.remaining_urls_path = Path(f"data/{self.page_id}/remaining_posts.json")
+        self.remaining_urls_path = Path(f"{self.crawler_dir}/{self.page_id}/remaining_posts.json")
 
 
     def on_parse_error(self):
@@ -336,7 +336,7 @@ class Crawler(BaseCrawler):
     def collect_comments_step(self, post_urls: dict[str, str]):
         self.logger.info(f"Begin to collect comments from {len(post_urls)} posts.")
         with tqdm_output(tqdm(total=len(post_urls), desc="Collecting Comments", unit="post")) as bar:
-            comment_csv_path = f"data/{self.page_id}/comments.csv"
+            comment_csv_path = f"{self.crawler_dir}/{self.page_id}/comments.csv"
             try:
                 while post_urls:
                     id, url = tuple(post_urls.items())[0]
@@ -444,7 +444,7 @@ class Crawler(BaseCrawler):
 
         # Get post's datetime a element
         post_datetime_a = profile_div.find_element(By.XPATH, "(../../../div)[2]//a")
-        self.scroll_into_view(post_datetime_a)
+        self.scroll_into_view(post_datetime_a, pause=0.2)
         WebDriverWait(self.chrome, 5).until(
             EC.presence_of_element_located((By.XPATH, f"{Crawler.content_on_hover_xpath}/descendant::div[contains(@class, '__fb-light-mode')]"))
         )
