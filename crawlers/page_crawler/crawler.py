@@ -230,14 +230,11 @@ class Crawler(BaseCrawler):
             SaveVideos(save_dir=f"{self.crawler_dir}/{self.page_id}", vid_url_col="video_urls", audio_url_col="video_audio_urls", id_col="post_id"),
         )
         with tqdm_output(tqdm(total=len(post_urls), desc="Collecting Comments", unit="post")) as bar:
-            comment_csv_path = f"{self.crawler_dir}/{self.page_id}/comments.csv"
             try:
                 while post_urls:
                     try:
                         id, d = tuple(post_urls.items())[0]
                         url = d["url"]
-                        is_reel = d["is_reel"]
-                        num_visual_content = d["num_visual_content"]
                         first_content_type = d["first_content_type"]
 
                         self.chrome.get("https://www.facebook.com/")
@@ -345,7 +342,7 @@ class Crawler(BaseCrawler):
 
         # Show full caption
         see_more_text = {"vi": "Xem thêm", "en": "See more"}
-        if to_bs4(self.chrome.find_element(By.XPATH, "//html")).find("div", attrs={"role": "button"}, string=see_more_text[self.language]):
+        if to_bs4(reel_div).find("div", attrs={"role": "button"}, string=see_more_text[self.language]):
             see_more_btn = reel_div.find_element(By.XPATH, f".//div[@role='button' and text()='{see_more_text[self.language]}']")
             see_more_btn.click()
 
@@ -463,7 +460,7 @@ class Crawler(BaseCrawler):
     
     def get_visual_content_id(self, url: str, content_type: Literal["img", "video"]):
         if content_type == "img":
-            return re.search(r"photo/?\?fbid=((\d)+)", url).group(1)
+            return re.search(r"fbid=((\d)+)", url).group(1)
         elif content_type == "video":
             return re.search(r"(\d+)[^\d]*$", url).group(0)
 

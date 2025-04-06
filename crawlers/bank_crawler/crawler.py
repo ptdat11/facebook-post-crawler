@@ -444,7 +444,7 @@ class Crawler(BaseCrawler):
 
         # Get post's datetime a element
         post_datetime_a = profile_div.find_element(By.XPATH, "(../../../div)[2]//a")
-        self.scroll_into_view(post_datetime_a, pause=0.2)
+        self.scroll_into_view(post_datetime_a)
         WebDriverWait(self.chrome, 5).until(
             EC.presence_of_element_located((By.XPATH, f"{Crawler.content_on_hover_xpath}/descendant::div[contains(@class, '__fb-light-mode')]"))
         )
