@@ -87,7 +87,7 @@ class BaseCrawler:
         # Options
         # Expand maximum heap
         self.driver_options.add_argument("--enable-precise-memory-info")
-        self.driver_options.add_argument(f'--js-flags=--max_old_space_size=0 --max_semi_space_size={int(1024 * additional_JS_heap / 3 + 32)}')
+        self.driver_options.add_argument(f'--js-flags=--max_old_space_size={4*1024} --max_semi_space_size={int(1024 * additional_JS_heap / 3 + 32)}')
         ## Disable image loading
         self.driver_options.add_argument("--blink-settings=imagesEnabled=false")
         ## Disable notifications

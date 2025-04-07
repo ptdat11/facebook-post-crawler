@@ -125,6 +125,7 @@ class Crawler(BaseCrawler):
         else:
             post_urls = {}
             cover_photo_text = {"vi": re.compile(r"đã cập nhật ảnh bìa của họ\.$"), "en": re.compile(r" updated their cover photo\.$")}
+            event_text = {"vi": re.compile(r"đã tạo một sự kiện\.$")}
             n_scraped_posts = 0
             current_post_idx = 1
             crashed = False
@@ -149,24 +150,32 @@ class Crawler(BaseCrawler):
                     # )
                     # self.post_collect_criteria.update_progress(self.chrome)
 
-                    post_div = self.get_loaded_posts(start=1, stop=1)[0]
+                    post_divs = self.get_loaded_posts(start=1, stop=1)
+                    if not post_divs:
+                        break
+
+                    post_div = post_divs[0]
                     post = None
                     scraped = False
                     self.scroll_into_view(post_div)
 
                     try:
+                        post_soup = to_bs4(post_div)
                         # Check if reel
-                        if to_bs4(post_div).find("a")["href"].startswith("/reel"):
+                        if post_soup.find("a")["href"].startswith("/reel"):
                             post = self.parse_reel(post_div)
                             scraped = True
 
                         # Check if update avatar
-                        elif to_bs4(post_div).find("img", {"data-imgperflogname": "feedCoverPhoto"}):
+                        elif post_soup.find("img", {"data-imgperflogname": "feedCoverPhoto"}):
                             self.logger.info(f"Found {ordinal(current_post_idx)} post as avatar, skipping...")
 
                         # Check if update cover photo
-                        elif to_bs4(post_div).find("h2").find(string=cover_photo_text[self.language]):
+                        elif post_soup.find("h2").find(string=cover_photo_text[self.language]):
                             self.logger.info(f"Found {ordinal(current_post_idx)} post as cover photo, skipping...")
+
+                        elif post_soup.find("h2").find(string=event_text[self.language]):
+                            self.logger.info(f"Found {ordinal(current_post_idx)} post as event highlight, skipping...")
                             
                         # Normal post
                         else:
@@ -209,10 +218,11 @@ class Crawler(BaseCrawler):
 
             # if met:
             #     self.logger.info(f"Post collect stopping criteria has met with threshold of {self.post_collect_criteria.threshold}")
+            with open(self.remaining_urls_path, "w+") as f:
+                    json.dump(post_urls, f, indent=2)
             
             self.start_driver()
             self.on_start()
-            self.ensure_logged_in()
         
         yield []
         self.collect_visual_content_step(post_urls)
@@ -229,7 +239,7 @@ class Crawler(BaseCrawler):
             SaveImages(save_dir=f"{self.crawler_dir}/{self.page_id}", img_url_col="img_urls", id_col="post_id"),
             SaveVideos(save_dir=f"{self.crawler_dir}/{self.page_id}", vid_url_col="video_urls", audio_url_col="video_audio_urls", id_col="post_id"),
         )
-        with tqdm_output(tqdm(total=len(post_urls), desc="Collecting Comments", unit="post")) as bar:
+        with tqdm_output(tqdm(total=len(post_urls), desc="Collecting Images/Videos", unit="post")) as bar:
             try:
                 while post_urls:
                     try:
