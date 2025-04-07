@@ -77,10 +77,10 @@ class Crawler(BaseCrawler):
     def __init__(
         self,
         page_id: str,
-        post_collect_threshold: float | int | datetime,
-        post_collect_criterion: Literal[
-            "elapsed_minutes", "n_posts", "post_time"
-        ] = "n_posts",
+        # post_collect_threshold: float | int | datetime,
+        # post_collect_criterion: Literal[
+        #     "elapsed_minutes", "n_posts", "post_time"
+        # ] = "n_posts",
         max_ram_percentage: float = 0.95,
         language: Literal["vi", "en"] = "vi",
         theme: Literal["light", "dark"] = "light",
